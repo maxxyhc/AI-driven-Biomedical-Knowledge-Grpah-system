@@ -369,7 +369,16 @@ def main_interface(workflow_agent, graph_interface):
 
                 st.subheader("Final Answer")
                 st.info(result["answer"])
-
+                
+                # display reasoning trace
+                if "reasoning_steps" in result and result["reasoning_steps"]:
+                    st.markdown("### 🧠 Reasoning Trace")
+                    with st.expander("View detailed reasoning process"):
+                        for step in result["reasoning_steps"]:
+                            st.markdown(f"**{step['step'].capitalize()}** — {step['thought']}")
+                else:
+                    st.info("No reasoning trace available for this run.")
+                
                 # Show raw results
                 if result.get("raw_results"):
                     with st.expander("View Raw Database Results (First 3)"):
@@ -440,6 +449,13 @@ def main():
         "Interactive biomedical AI discovery platform powered by LangGraph & "
         "knowledge graphs"
     )
+    #adding rest memmory button
+    with st.sidebar:
+        st.header("🧠 Memory Control")
+        st.markdown("Use this to clear the conversation memory and start fresh.")
+        if st.button("🧹 Reset Conversation"):
+            workflow_agent.reset_memory()
+            st.success("Conversation memory has been cleared.")
 
     # Main interface
     main_interface(workflow_agent, graph_interface)

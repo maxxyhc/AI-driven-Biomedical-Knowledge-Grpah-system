@@ -1,0 +1,74 @@
+geneSymbol,scoreGDA,diseaseName
+MAPT,1.0,Alzheimer
+APP,1.0,Alzheimer
+APOE,1.0,Alzheimer
+PSEN1,1.0,Alzheimer
+BACE1,1.0,Alzheimer
+PSEN2,1.0,Alzheimer
+TREM2,1.0,Alzheimer
+SNCA,1.0,Alzheimer
+ACHE,1.0,Alzheimer
+BDNF,1.0,Alzheimer
+CLU,1.0,Alzheimer
+GSK3B,1.0,Alzheimer
+BCHE,1.0,Alzheimer
+TNF,1.0,Alzheimer
+SORL1,1.0,Alzheimer
+IL1B,1.0,Alzheimer
+ACE,1.0,Alzheimer
+BIN1,1.0,Alzheimer
+PICALM,1.0,Alzheimer
+ABCA7,1.0,Alzheimer
+AGER,1.0,Alzheimer
+TOMM40,1.0,Alzheimer
+IGF1,1.0,Alzheimer
+GRN,1.0,Alzheimer
+PPARG,1.0,Alzheimer
+ADAM10,1.0,Alzheimer
+CD33,1.0,Alzheimer
+TTR,1.0,Alzheimer
+APOC1,1.0,Alzheimer
+NECTIN2,1.0,Alzheimer
+LOC106694315,0.4,lung cancer
+CHRNA5,0.4,lung cancer
+MPO,0.4,lung cancer
+CHRNA3,0.4,lung cancer
+CYP2A6,0.4,lung cancer
+CASP8,0.4,lung cancer
+EGFR,0.3,lung cancer
+CD274,0.3,lung cancer
+KRAS,0.25,lung cancer
+ALK,0.2,lung cancer
+FGFR1,0.2,lung cancer
+ROS1,0.2,lung cancer
+ERBB2,0.2,lung cancer
+BRAF,0.2,lung cancer
+FGFR2,0.2,lung cancer
+PDCD1,0.2,lung cancer
+MET,0.2,lung cancer
+SLTM,0.2,lung cancer
+ERBB3,0.2,lung cancer
+PIK3CA,0.2,lung cancer
+ESR1,0.5,breast cancer
+BRIP1,0.4,breast cancer
+C11orf65,0.4,breast cancer
+ATM,0.4,breast cancer
+ERBB2,0.35,breast cancer
+PIK3CA,0.35,breast cancer
+TP53,0.35,breast cancer
+BRCA1,0.35,breast cancer
+CYP19A1,0.35,breast cancer
+EGFR,0.35,breast cancer
+BRCA2,0.3,breast cancer
+PGR,0.3,breast cancer
+MTOR,0.3,breast cancer
+CCND1,0.3,breast cancer
+IGF1,0.3,breast cancer
+FGFR2,0.3,breast cancer
+BCL2,0.25,breast cancer
+RET,0.25,breast cancer
+PRL,0.25,breast cancer
+SPHK1,0.25,breast cancer
+IGF1R,0.25,breast cancer
+PTEN,0.25,breast cancer
+CXCR4,0.25,breast cancer

@@ -23,6 +23,9 @@ class WorkflowState(TypedDict):
     entities: Optional[List[str]]
     cypher_query: Optional[str]
     results: Optional[List[Dict]]
+    #new features store conversation memory
+    history: Optional[list[dict[str, str]]]
+    reasoning_steps: Optional[List[Dict[str, str]]]
     final_answer: Optional[str]
     error: Optional[str]
 
@@ -46,6 +49,7 @@ class WorkflowAgent:
         self.schema = self.graph_db.get_schema_info()
         self.property_values = self._get_key_property_values()
         self.workflow = self._create_workflow()
+
 
     def _get_key_property_values(self) -> Dict[str, List[Any]]:
         """Get property values dynamically from all nodes and relationships.
@@ -134,12 +138,14 @@ class WorkflowAgent:
         workflow.add_node("generate", self.generate_query)
         workflow.add_node("execute", self.execute_query)
         workflow.add_node("format", self.format_answer)
+        workflow.add_node("reflect", self.reflect_answer) # adding new node
 
         workflow.add_edge("classify", "extract")
         workflow.add_edge("extract", "generate")
         workflow.add_edge("generate", "execute")
         workflow.add_edge("execute", "format")
-        workflow.add_edge("format", END)
+        workflow.add_edge("format", "reflect")  # let format go into reflect
+        workflow.add_edge("reflect", END)
 
         workflow.set_entry_point("classify")
         return workflow.compile()
@@ -168,7 +174,23 @@ Respond with just the type."""
             # Build classification prompt with available question types
             prompt = self._build_classification_prompt(state["user_question"])
             # Use minimal tokens since we only need a single classification word
-            state["question_type"] = self._get_llm_response(prompt, max_tokens=20)
+            
+            #add a prompt for reasoning thinking
+            reasoning_prompt = f"Think step-by-step before classifying:\n{prompt}"
+
+            reasoning = self._get_llm_response(reasoning_prompt, max_tokens=50)
+            # use last sentence as classification result
+            classification = reasoning.split("\n")[-1].strip()
+            state["question_type"] = classification
+
+            # record the reasoning steps
+            if "reasoning_steps" not in state or state["reasoning_steps"] is None:
+                state["reasoning_steps"] = []
+            state["reasoning_steps"].append({
+                "step": "classify",
+                "thought": reasoning
+            })
+
         except Exception as e:
             # If classification fails, record error but continue with safe fallback
             state["error"] = f"Classification failed: {str(e)}"
@@ -241,6 +263,13 @@ Return a JSON list: ["term1", "term2"] or []"""
         except (json.JSONDecodeError, AttributeError):
             # Fallback to empty list if JSON parsing fails
             state["entities"] = []
+
+        if "reasoning_steps" not in state:
+            state["reasoning_steps"] = []
+        state["reasoning_steps"].append({
+            "step" : "extract",
+            "thought" : f"Extracted entities: {state['entities']}"
+        })
 
         return state
 
@@ -315,6 +344,15 @@ Return only the Cypher query."""
             ).strip()
 
         state["cypher_query"] = cypher_query
+        
+        #record the reasoning
+        if "reasoning_steps" not in state:
+            state["reasoning_steps"] = []
+        state["reasoning_steps"].append({
+            "step": "generate",
+            "thought": f"Generated query:\n{state['cypher_query']}"
+        })
+
         return state
 
     def execute_query(self, state: WorkflowState) -> WorkflowState:
@@ -334,6 +372,16 @@ Return only the Cypher query."""
             state["error"] = f"Query failed: {str(e)}"
             # Set empty results so the format step can handle the error gracefully
             state["results"] = []
+
+        #record the reasoning
+        if "reasoning_steps" not in state:
+            state["reasoning_steps"] = []
+        query = state.get("cypher_query")
+        status = "executed successfully" if state.get("results") else "no results or error"
+        state["reasoning_steps"].append({
+            "step": "execute",
+            "thought": f"Executed query ({status}): {query}"
+        })
 
         return state
 
@@ -387,32 +435,187 @@ Make it concise and informative.""",
             max_tokens=250,  # Balanced token limit for informative but concise
             # responses
         )
+
+        #record the reasoning
+        if "reasoning_steps" not in state:
+            state["reasoning_steps"] = []
+        summary = state.get("final_answer", "")[:200]
+        state["reasoning_steps"].append({
+            "step": "format",
+            "thought": f"Formatted final answer preview: {summary}"
+        })
+
         return state
+    
+    #added new func for llm to reflect its own answer
+    def reflect_answer(self, state: WorkflowState) -> WorkflowState:
+        """Reflect on the generated answer and verify reasoning consistency."""
+        try:
+            reflection_prompt = f"""
+            You are a critical reviewer.
+            Review this biomedical Q&A process and identify any logical gaps, missing details,
+            or incorrect assumptions. Suggest how the answer could be improved.
+
+            Question: {state.get('user_question')}
+            Reasoning trace: {json.dumps(state.get('reasoning_steps', []), indent=2)}
+            Final Answer: {state.get('final_answer')}
+            """
+
+            reflection = self._get_llm_response(reflection_prompt, max_tokens=150)
+
+            # Save the reflection result
+            if "reasoning_steps" not in state:
+                state["reasoning_steps"] = []
+            state["reasoning_steps"].append({
+                "step": "reflect",
+                "thought": reflection
+            })
+
+            # Optionally append the reflection to the final answer
+            state["final_answer"] += f"\n\n🪞 Reflection: {reflection}"
+
+        except Exception as e:
+            state["error"] = f"Reflection failed: {str(e)}"
+
+        return state
+
 
     def answer_question(self, question: str) -> Dict[str, Any]:
         """Answer a biomedical question using the LangGraph workflow."""
+        
+        if not hasattr(self, "conversation_state"):
+            self.conversation_state = WorkflowState(
+                user_question=question,
+                question_type=None,
+                entities=None,
+                cypher_query=None,
+                results=None,
+                history=[], #initial conversation memory
+                final_answer=None,
+                error=None,
+            )
+        else: 
+            self.conversation_state["user_question"] = question
 
-        initial_state = WorkflowState(
-            user_question=question,
-            question_type=None,
-            entities=None,
-            cypher_query=None,
-            results=None,
-            final_answer=None,
-            error=None,
+        # Build prompt with past conversation
+        prompt = self.build_prompt(self.conversation_state)
+
+        # get llm response
+        model_output = self._get_llm_response(prompt, max_tokens=300)
+
+        self.update_memory(self.conversation_state, question, model_output)
+
+        # Run workflow
+        final_state = self.workflow.invoke(self.conversation_state)
+
+        # save answer
+        final_state["final_answer"] = model_output
+
+
+        if "reasoning_trace" not in self.conversation_state:
+            self.conversation_state["reasoning_trace"] = []
+        self.conversation_state["reasoning_trace"].append(
+            "\n".join(
+                f"{step['step']}: {step['thought']}"
+                for step in final_state.get("reasoning_steps", [])
+                if "thought" in step
+            )
         )
-
-        final_state = self.workflow.invoke(initial_state)
-
+        
+        # print("🧠 Reasoning trace:", final_state.get("reasoning_steps"))
         return {
-            "answer": final_state.get("final_answer", "No answer generated"),
+            "answer": model_output,
+            "history": self.conversation_state["history"],
             "question_type": final_state.get("question_type"),
             "entities": final_state.get("entities", []),
             "cypher_query": final_state.get("cypher_query"),
             "results_count": len(final_state.get("results", [])),
             "raw_results": final_state.get("results", [])[:3],
             "error": final_state.get("error"),
+            "reasoning_steps": final_state.get("reasoning_steps", []),
         }
+
+    #new func for updata memory when aksing question
+    def update_memory(self, state: WorkflowState, user_input: str, model_output: str):
+        if "history" not in state or state["history"] is None:
+            state["history"] = []
+        state["history"].append({
+            "user": user_input,
+            "assistant": model_output
+        })
+
+    def reset_memory(self):
+        """Manually clear the conversation history for a fresh start."""
+        if hasattr(self, "conversation_state"):
+            self.conversation_state["history"] = []
+            print("🧹 Conversation memory has been cleared.")
+        else:
+            print("⚠️ No active conversation found to reset.")
+
+    def build_prompt(self, state: WorkflowState) -> str:
+        """Context-aware prompt builder that incorporates relevant history and entities to help the model reason across multiple turns."""
+        history = state.get("history", [])
+        recent_context = ""
+        related_entities = []
+
+        # Include last 3 exchanges as conversational context
+        if history:
+            for turn in history[-3:]:
+                recent_context += f"User: {turn['user']}\nAssistant: {turn['assistant']}\n"
+
+        # Automatically extract recurring biomedical entities from history
+        for turn in history[-5:]:
+            if "gene" in turn["user"].lower() or "gene" in turn["assistant"].lower():
+                related_entities.append("gene")
+            if "protein" in turn["user"].lower() or "protein" in turn["assistant"].lower():
+                related_entities.append("protein")
+            if "drug" in turn["user"].lower() or "drug" in turn["assistant"].lower():
+                related_entities.append("drug")
+            if "disease" in turn["user"].lower() or "disease" in turn["assistant"].lower():
+                related_entities.append("disease")
+
+        # Deduplicate keywords
+        related_entities = list(set(related_entities))
+        print(f"🧠 build_prompt — Detected previous entities: {', '.join(related_entities) if related_entities else 'none'}")
+
+        current_question = state.get("user_question","")
+
+        # Simple topic similarity guard — avoid unrelated context
+        if history and not any(word in current_question.lower() for word in ["gene", "protein", "drug", "disease"]):
+            print("🧩 Skipping old context — new question seems unrelated.")
+            recent_context = ""
+            related_entities = []
+
+        # Build adaptive context instructions
+        context_instruction = (
+            f"The user has previously asked questions involving: {', '.join(related_entities)}.\n"
+            if related_entities
+            else "No explicit entity context detected from previous turns.\n"
+        )
+
+        # Include last reasoning trace
+        reasoning_trace = state.get("reasoning_trace", [])
+        if reasoning_trace:
+            recent_reasoning = "\n".join(reasoning_trace[-2:])  # include last 2 reasoning steps
+            print("🪄 Continuing reasoning chain from previous run.")
+        else:
+            recent_reasoning = ""
+
+        # Combine into the final prompt
+        current_question = state.get("user_question", "")
+        prompt = f"""
+    You are a biomedical AI assistant that answers questions using knowledge graphs and LangGraph workflows.
+
+    Here is the recent conversation history (most recent first):
+    {recent_context}
+
+    {context_instruction}
+
+    {f"Previous reasoning context:\n{recent_reasoning}\n" if recent_reasoning else ""}
+    Now answer the following question, considering all relevant prior context:
+    Question: {current_question}
+    """
+        return prompt.strip()
 
 
 def create_workflow_graph() -> Any:
@@ -431,3 +634,4 @@ def create_workflow_graph() -> Any:
     )
 
     return agent.workflow
+

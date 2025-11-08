@@ -15,7 +15,7 @@ The system now tracks prior user–agent interactions to preserve context across
 - Can be reset manually with `reset_memory()`
 
 **Why it matters:**
-This allows the agent to remember entities (e.g., “TP53”, “BRCA1”) or discussion topics (e.g., “drug resistance”) across turns, creating a more coherent, human-like dialogue.
+This allows the agent to remember entities or discussion topics across turns, creating a more coherent and human-like dialogue.
 
 ---
 

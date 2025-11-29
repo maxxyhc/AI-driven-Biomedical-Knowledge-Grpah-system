@@ -367,8 +367,15 @@ def main_interface(workflow_agent, graph_interface):
                     if result["cypher_query"]:
                         st.code(result["cypher_query"], language="cypher")
 
-                st.subheader("Answer")
-                st.markdown(result["answer"])
+                # Display answer in gray box (Final Answer heading comes from formatted content)
+                st.markdown(
+                    f"""<div style="background-color: #242424; padding: 20px; border-radius: 5px;">
+
+{result["answer"]}
+
+</div>""",
+                    unsafe_allow_html=True
+                )
                 
                 # display reasoning trace
                 if "reasoning_steps" in result and result["reasoning_steps"]:

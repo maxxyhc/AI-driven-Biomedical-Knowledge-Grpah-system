@@ -387,10 +387,12 @@ Return only the Cypher query."""
         return state
 
     def format_answer(self, state: WorkflowState) -> WorkflowState:
-        """Format database results into human-readable answer.
+        """Format database results into professional medical answer with 3 sections.
 
-        Takes raw database results and converts them into natural language
-        responses, handling different question types and error conditions.
+        Creates structured output with:
+        1. Final Answer (3-6 sentence summary)
+        2. Key Findings (bullet points)
+        3. Knowledge Graph Evidence (table)
         """
         # Handle any errors that occurred during the workflow
         if state.get("error"):
@@ -403,54 +405,102 @@ Return only the Cypher query."""
 
         # General knowledge questions use LLM knowledge instead of database results
         if question_type == "general_knowledge":
-            # Generate answer from LLM's training knowledge rather than database lookup
             state["final_answer"] = self._get_llm_response(
-                f"""Answer this general biomedical question using your knowledge:
+                f"""You are a biomedical QA agent. Answer this question clearly and concisely.
 
 Question: {state['user_question']}
 
-Provide a clear, informative answer about biomedical concepts.""",
-                max_tokens=300,  # Allow more tokens for explanatory content
+Format your response as:
+### Final Answer
+[3-6 sentences providing a clear, medically accurate explanation]
+
+### Key Concepts
+- **Concept 1**: Brief explanation
+- **Concept 2**: Brief explanation
+[Add 3-5 key concepts]""",
+                max_tokens=400,
             )
             return state
 
         # Handle database-based answers using query results
         results = state.get("results", [])
         if not results:
-            # No results found - provide helpful guidance for next steps
             state["final_answer"] = (
-                "I didn't find any information for that question. Try asking about "
-                "genes, diseases, or drugs in our database."
+                "### Final Answer\n\n"
+                "I didn't find any information in the knowledge graph for that question. "
+                "Try asking about specific genes, diseases, or drugs that are in our database."
             )
             return state
 
-        # Convert raw database results into natural language using LLM
-        state["final_answer"] = self._get_llm_response(
-            f"""Convert these database results into a clear answer:
+        # Create professionally formatted answer with 3 sections
+        formatting_prompt = f"""You are a biomedical QA agent that formats answers in a clear, accurate, and reader-friendly way.
+Your job is to transform raw query results from a biomedical knowledge graph into a concise, medically sound summary.
 
+STRICT FORMATTING RULES:
+
+1. **Final Answer** (3-6 sentences)
+   - Provide a concise, medically accurate summary
+   - Avoid technical database details
+   - Write for a scientifically literate audience
+
+2. **Key Findings** (bullet points)
+   - Use format: **Entity → Related Entity**
+   - Examples: **Drug → Disease Treated**, **Protein → Mechanism**
+   - Keep it human-readable and fact-focused
+
+3. **Knowledge Graph Evidence** (table)
+   - Convert top 3-5 results into a clean markdown table
+   - Use descriptive column headers
+   - Keep rows concise
+
+DO NOT include:
+- Reflection, reasoning steps, or debug information
+- Uncertainties in the Final Answer section
+- LangGraph or workflow mentions
+- Cypher query details
+
+===== INPUT =====
 Question: {state['user_question']}
-Results: {json.dumps(results[:5], indent=2)}
-Total found: {len(results)}
+Database Results: {json.dumps(results[:5], indent=2)}
+Total Results Found: {len(results)}
 
-Make it concise and informative.""",
-            max_tokens=250,  # Balanced token limit for informative but concise
-            # responses
+===== OUTPUT FORMAT =====
+### Final Answer
+[Your 3-6 sentence summary here]
+
+### Key Findings
+- **Entity → Entity**: [relationship]
+- **Entity → Entity**: [relationship]
+
+### Knowledge Graph Evidence
+| Column 1 | Column 2 | Column 3 |
+|----------|----------|----------|
+| Data     | Data     | Data     |
+
+Now format the answer following these rules EXACTLY:"""
+
+        state["final_answer"] = self._get_llm_response(
+            formatting_prompt,
+            max_tokens=600,  # More tokens for structured output
         )
 
-        #record the reasoning
+        # Record the reasoning (for debugging only, not shown to user)
         if "reasoning_steps" not in state:
             state["reasoning_steps"] = []
-        summary = state.get("final_answer", "")[:200]
         state["reasoning_steps"].append({
             "step": "format",
-            "thought": f"Formatted final answer preview: {summary}"
+            "thought": f"Formatted answer with {len(results)} results into 3-section structure"
         })
 
         return state
     
     #added new func for llm to reflect its own answer
     def reflect_answer(self, state: WorkflowState) -> WorkflowState:
-        """Reflect on the generated answer and verify reasoning consistency."""
+        """Reflect on the generated answer and verify reasoning consistency.
+
+        NOTE: Reflection is stored in reasoning_steps for debugging only.
+        It is NOT appended to the user-facing answer to keep output professional.
+        """
         try:
             reflection_prompt = f"""
             You are a critical reviewer.
@@ -464,7 +514,7 @@ Make it concise and informative.""",
 
             reflection = self._get_llm_response(reflection_prompt, max_tokens=150)
 
-            # Save the reflection result
+            # Save the reflection result (for debugging only, not shown to user)
             if "reasoning_steps" not in state:
                 state["reasoning_steps"] = []
             state["reasoning_steps"].append({
@@ -472,11 +522,17 @@ Make it concise and informative.""",
                 "thought": reflection
             })
 
-            # Optionally append the reflection to the final answer
-            state["final_answer"] += f"\n\n🪞 Reflection: {reflection}"
+            # DO NOT append reflection to final_answer - keep answer professional
+            # Reflection is available in reasoning_steps for debugging
 
         except Exception as e:
-            state["error"] = f"Reflection failed: {str(e)}"
+            # Don't fail the whole workflow if reflection fails
+            if "reasoning_steps" not in state:
+                state["reasoning_steps"] = []
+            state["reasoning_steps"].append({
+                "step": "reflect",
+                "thought": f"Reflection failed: {str(e)}"
+            })
 
         return state
 
@@ -492,7 +548,7 @@ Make it concise and informative.""",
                 cypher_query=None,
                 results=None,
                 history=[], #initial conversation memory
-                reasoning_steps=None,
+                reasoning_steps=[],
                 reasoning_trace=[],
                 final_answer=None,
                 error=None,
@@ -551,7 +607,7 @@ Make it concise and informative.""",
             self.conversation_state["reasoning_trace"] = []
 
             # Clear previous reasoning steps
-            self.conversation_state["reasoning_steps"] = None
+            self.conversation_state["reasoning_steps"] = []
 
             # Clear previous question context
             self.conversation_state["user_question"] = ""

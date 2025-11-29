@@ -6,7 +6,7 @@ authors = [
     {name = "Development Team", email = "team@example.com"},
 ]
 dependencies = [
-    "streamlit>=1.29.0",
+    "streamlit>=1.51.0",
     "langgraph>=0.0.20",
     "anthropic>=0.18.1",
     "neo4j>=5.15.0",

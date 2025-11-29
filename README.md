@@ -1,40 +1,130 @@
-# 🧠 Helix Navigator — AI-driven Biomedical Knowledge Graph System
+# Helix Navigator
 
-An educational and research framework that integrates **Large Language Models (LLMs)**, **LangGraph**, and **Neo4j knowledge graphs** to explore reasoning across genes, proteins, diseases, and drugs.
+**Learn LangGraph and Knowledge Graphs through Biomedical AI**
 
-This project demonstrates how structured biomedical data can be combined with generative reasoning to build explainable, multi-step AI workflows.
+An interactive educational project that teaches modern AI development through hands-on biomedical applications. Build AI agents that answer complex questions about genes, proteins, diseases, and drugs using graph databases and multi-step AI workflows.
 
----
+*Navigate: [Getting Started](docs/getting-started.md) | [Foundations Guide](docs/foundations-and-background.md) | [Reference](docs/reference.md) | [Technical Guide](docs/technical-guide.md)*
 
-## 🧩 Newly Added Features
 
-### 1. Conversation Memory
-The system now tracks prior user–agent interactions to preserve context across multiple questions.
-- Stores conversation history in `WorkflowState["history"]`
-- Enables context-aware prompt building using previous turns
-- Can be reset manually with `reset_memory()`
+## What You'll Learn
 
-**Why it matters:**
-This allows the agent to remember entities or discussion topics across turns, creating a more coherent and human-like dialogue.
+- **Knowledge Graphs**: Represent domain knowledge as nodes and relationships
+- **LangGraph**: Build multi-step AI workflows with state management  
+- **Cypher Queries**: Query graph databases effectively
+- **AI Integration**: Combine language models with structured knowledge
+- **Biomedical Applications**: Apply AI to drug discovery and personalized medicine
 
----
+## Quick Start
 
-### 2. Reflection Step
-A new **Reflection Node** (`reflect_answer`) was added to the LangGraph workflow.
-- Runs after the main reasoning chain
-- Prompts the model to **critically review** its own reasoning
-- Appends a reflection summary under `🪞 Reflection:` in the final output
+1. **New to these concepts?** Read the [Foundations Guide](docs/foundations-and-background.md)
+2. **Setup**: Follow [Getting Started](docs/getting-started.md) for installation
+3. **Learn**: Use the interactive Streamlit web interface
+4. **Practice**: Work through the exercises in the web app
 
-**Why it matters:**
-Encourages self-correction and transparency in AI reasoning—useful for biomedical queries where accuracy and interpretability are key.
+## Technology Stack
 
----
+- **LangGraph**: AI workflow orchestration
+- **Neo4j**: Graph database
+- **Anthropic Claude**: Language model
+- **Streamlit**: Interactive web interface
+- **LangGraph Studio**: Visual debugging
 
-### 3. Reasoning Trace Persistence
-The model now maintains a `reasoning_trace` variable across interactions.
-- Stores condensed summaries of reasoning steps from previous runs
-- Reintegrates these traces into subsequent prompts
-- Supports consistent multi-turn reasoning
+## Installation
 
-**Why it matters:**
-Preserves the logical flow across runs, helping the AI recall prior inference paths when analyzing related biomedical questions.
+**Quick Setup**: Python 3.10+, Neo4j, PDM
+
+```bash
+# Install dependencies
+pdm install
+
+# Setup environment
+cp .env.example .env
+# Edit .env with your API keys
+
+# Load data and start
+pdm run load-data
+pdm run app
+```
+
+## Project Structure
+
+```
+├── data/                      # Cleaned and structured data for Neo4j
+│
+├── docs/                      # Project documentation and guides
+│
+├── langgraph-studio/          # LangGraph Studio configuration and workflow graph
+│
+├── scripts/                   # Utility scripts for loading data, seeding Neo4j, etc.
+│
+├── src/
+│   ├── agents/
+│   │   ├── graph_interface.py     # Wrapper for Neo4j queries (schema + property value discovery)
+│   │   ├── workflow_agent.py      # Main LangGraph workflow agent
+│   │   │                             Based on the original implementation, this version includes:
+│   │   │                             • Conversation memory across turns
+│   │   │                             • Reflection step (model critiques & improves its own answer)
+│   │   │                             • Reasoning trace persistence across questions
+│   │   │                             • Context-aware prompt builder using history + entities
+│   │   │                             • Dynamic schema/property-value extraction for accurate Cypher generation
+│   │   │                             • Final Answer formatting with 3 clean sections:
+│   │   │                                   - Final Answer (simple, medically correct)
+│   │   │                                   - Key Findings (clear bullet points)
+│   │   │                                   - Knowledge Graph Evidence (visual table)
+│   └── web/
+│       └── app.py                 #Streamlit-based educational web interface for interacting with the system.
+│                                  #Based on the original version, this enhanced version adds:
+│                                   • Integrated new WorkflowAgent features (memory, reflection, trace)
+│                                   • Added sidebar button to reset conversation state
+│                                   • Display of reasoning steps and raw database results
+│                                   • Improved agent output layout (cleaner sections + better formatting)
+│
+├── tests/                         # Unit tests for agents and query logic
+│
+├── README.md
+└── pyproject.toml
+
+```
+
+**Key Files**:
+- `src/agents/workflow_agent.py` - Main LangGraph agent
+- `src/web/app.py` - Interactive Streamlit interface
+- `docs/` - Complete documentation
+
+## Running the Application
+
+### Basic Usage
+```bash
+pdm run load-data         # Load biomedical data
+pdm run app              # Start web interface
+```
+
+### Visual Debugging
+```bash
+pdm run langgraph    # Start LangGraph Studio
+```
+
+### Development
+```bash
+pdm run test            # Run tests (14 tests)
+pdm run format          # Format code
+pdm run lint            # Check quality
+```
+
+**Full commands**: See [Reference Guide](docs/reference.md)
+
+## AI Agent
+
+**WorkflowAgent** - LangGraph implementation with transparent processing for learning core LangGraph concepts through biomedical applications
+
+## Example Questions
+
+- **"Which drugs have high efficacy for treating diseases?"**
+- **"Which approved drugs treat cardiovascular diseases?"**
+- **"Which genes encode proteins that are biomarkers for diseases?"**
+- **"What drugs target proteins with high confidence disease associations?"**
+- **"Which approved drugs target specific proteins?"**
+- **"Which genes are linked to multiple disease categories?"**
+- **"What proteins have causal associations with diseases?"** 
+

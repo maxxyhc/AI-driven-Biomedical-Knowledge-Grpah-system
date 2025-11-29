@@ -367,8 +367,8 @@ def main_interface(workflow_agent, graph_interface):
                     if result["cypher_query"]:
                         st.code(result["cypher_query"], language="cypher")
 
-                st.subheader("Final Answer")
-                st.info(result["answer"])
+                st.subheader("Answer")
+                st.markdown(result["answer"])
                 
                 # display reasoning trace
                 if "reasoning_steps" in result and result["reasoning_steps"]:
